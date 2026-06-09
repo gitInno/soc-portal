@@ -208,7 +208,6 @@ def get_package_path(tenant_slug, os_type):
 # ─────────────────────────────────────────
 @app.route("/api/v1/swprobe/download")
 def download():
-    check_auth()
     tenant_slug = request.args.get("tenant", "")
     os_type = request.args.get("os", "").lower()
 
