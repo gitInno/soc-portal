@@ -192,10 +192,16 @@ def next_wg_ip():
     return None
 
 def get_package_path(tenant_slug, os_type):
-    ext = "exe" if os_type == "windows" else "deb"
-    arch = "windows" if os_type == "windows" else "amd64"
-    fname = f"swprobe-{tenant_slug}_1.0.1_{arch}.{ext}"
-    return os.path.join(PACKAGES_DIR, fname)
+    if os_type == "windows":
+        # Preferuj ZIP, fallback na EXE
+        for ext in ("zip", "exe"):
+            fname = f"swprobe-{tenant_slug}_1.0.1_windows.{ext}"
+            path = os.path.join(PACKAGES_DIR, fname)
+            if os.path.exists(path):
+                return path
+        return os.path.join(PACKAGES_DIR, f"swprobe-{tenant_slug}_1.0.1_windows.zip")
+    else:
+        return os.path.join(PACKAGES_DIR, f"swprobe-{tenant_slug}_1.0.1_amd64.deb")
 
 # ─────────────────────────────────────────
 # GET /api/v1/swprobe/download
@@ -352,7 +358,7 @@ def build():
         "tenant": tenant_slug,
         "wg_ip": wg_ip,
         "packages": {
-            "windows": f"swprobe-{tenant_slug}_1.0.1_windows.exe",
+            "windows": f"swprobe-{tenant_slug}_1.0.1_windows.zip",
             "linux": f"swprobe-{tenant_slug}_1.0.1_amd64.deb"
         },
         "download_url": f"https://swprobe.innovativeit.sk/api/v1/swprobe/download?tenant={tenant_slug}"
