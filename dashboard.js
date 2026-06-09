@@ -295,6 +295,51 @@ async function toggleNotification(id, active) {
   } catch(e) { console.error('toggleNotification:', e); }
 }
 
+// ── Devices (Zariadenia) ──────────────────────────────────────
+async function loadDevices() {
+  const tenant = _currentTenantSlug || window._dashTenant || '';
+  if (!tenant) return;
+  const tbody = document.getElementById('devices-table');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Načítavam zariadenia...</td></tr>';
+  try {
+    const r = await fetch(API_BASE + '/api/v1/portal/devices?tenant=' + tenant, {
+      headers: {'X-SOC-Key': SOC_KEY}
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Chyba API');
+    renderDevices(d.devices || []);
+    const dcDev = document.getElementById('dc-devices');
+    if (dcDev) dcDev.textContent = d.online;
+  } catch(e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--red)">Chyba načítania zariadení</td></tr>';
+    console.error('loadDevices:', e);
+  }
+}
+
+function renderDevices(devices) {
+  const tbody = document.getElementById('devices-table');
+  if (!tbody) return;
+  if (!devices.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--text3)">Žiadne zariadenia. Nainštalujte SW Probe u zákazníka.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = devices.map((d, i) => {
+    const isLast = i === devices.length - 1;
+    const border = isLast ? '' : 'border-bottom:1px solid var(--border)';
+    const dotCls = d.online ? 'online' : (d.status === 'unknown' ? 'unknown' : 'offline');
+    const badgeSt = d.online ? 'badge-green' : (d.status === 'unknown' ? 'badge-gray' : 'badge-red');
+    const stLabel = d.online ? 'Online' : (d.status === 'unknown' ? 'Neznámy' : 'Offline');
+    const typeBadge = d.probe_type === 'SOC Agent' ? 'badge-blue' : 'badge-gray';
+    return '<tr style="' + border + '">' +
+      '<td style="padding:12px 20px"><div style="display:flex;align-items:center;gap:10px"><div class="device-status-dot ' + dotCls + '"></div><strong>' + d.hostname + '</strong>' + (d.version ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">v' + d.version + '</span>' : '') + '</div></td>' +
+      '<td style="padding:12px 20px;font-family:var(--mono);font-size:12px;color:var(--text2)">' + (d.ip || '—') + '</td>' +
+      '<td style="padding:12px 20px"><span class="badge ' + typeBadge + '">' + d.probe_type + '</span></td>' +
+      '<td style="padding:12px 20px"><span class="badge ' + badgeSt + '">' + stLabel + '</span></td>' +
+      '<td style="padding:12px 20px;font-family:var(--mono);font-size:11px;color:var(--text3)">' + (d.last_seen || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
 async function saveTelegram() {
   const tenant = _currentTenantSlug || window._dashTenant || '';
   const input  = document.getElementById('notif-tg-input');

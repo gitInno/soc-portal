@@ -20,6 +20,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText as MIMETextEmail
 import io
 from fpdf import FPDF
+import requests as _requests_lib
 
 app = Flask(__name__)
 limiter = Limiter(
@@ -61,6 +62,7 @@ def add_cors_headers(response):
 @app.route("/api/v1/auth/reset-password", methods=["OPTIONS"])
 @app.route("/api/v1/portal/change-password", methods=["OPTIONS"])
 @app.route("/api/v1/portal/notifications", methods=["OPTIONS"])
+@app.route("/api/v1/portal/devices", methods=["OPTIONS"])
 def handle_options(**kwargs):
     return "", 204
 
@@ -1876,6 +1878,115 @@ def save_notification():
         return jsonify({'success': True, 'id': str(row[0]) if row else None})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+ZABBIX_URL  = "http://localhost:8081/api_jsonrpc.php"
+ZABBIX_USER = "Admin"
+ZABBIX_PASS = "zabbix"
+
+def _zbx_auth():
+    try:
+        r = _requests_lib.post(ZABBIX_URL, json={
+            "jsonrpc": "2.0", "method": "user.login",
+            "params": {"username": ZABBIX_USER, "password": ZABBIX_PASS}, "id": 1
+        }, timeout=3)
+        return r.json().get("result")
+    except Exception:
+        return None
+
+def _zbx_hosts(token, hostnames):
+    """Return dict hostname→{available, status, os, ip} for given hostnames."""
+    if not token or not hostnames:
+        return {}
+    try:
+        r = _requests_lib.post(ZABBIX_URL, json={
+            "jsonrpc": "2.0", "method": "host.get",
+            "params": {
+                "output": ["hostid", "host", "name", "status", "available"],
+                "selectInterfaces": ["ip", "type"],
+                "filter": {"host": hostnames}
+            },
+            "auth": token, "id": 2
+        }, timeout=3)
+        result = {}
+        for h in r.json().get("result", []):
+            ip = next((i["ip"] for i in h.get("interfaces", []) if i["type"] == "1"), "")
+            # available: 0=unknown, 1=available, 2=unavailable
+            avail = int(h.get("available", 0))
+            result[h["host"]] = {"zabbix_avail": avail, "zabbix_ip": ip}
+        return result
+    except Exception:
+        return {}
+
+
+@app.route('/api/v1/portal/devices', methods=['GET'])
+def get_devices():
+    check_auth()
+    tenant_slug = request.args.get('tenant', '')
+    if not tenant_slug:
+        return jsonify({'error': 'tenant required'}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM tenants WHERE slug=%s AND active=true', (tenant_slug,))
+                t = cur.fetchone()
+                if not t:
+                    return jsonify({'error': 'Tenant not found'}), 404
+                tenant_id = t[0]
+
+                cur.execute('''
+                    SELECT p.hostname, host(p.ip_address), p.status, p.last_seen,
+                           ph.last_seen AS heartbeat_at, ph.version
+                    FROM probes p
+                    LEFT JOIN probe_heartbeats ph ON ph.probe_hostname = p.hostname
+                    WHERE p.tenant_id = %s
+                    ORDER BY p.created_at
+                ''', (tenant_id,))
+                rows = cur.fetchall()
+
+        hostnames = [r[0] for r in rows]
+        zbx_token = _zbx_auth()
+        zbx_map   = _zbx_hosts(zbx_token, hostnames)
+
+        devices = []
+        for row in rows:
+            hostname, ip, db_status, last_seen, heartbeat_at, version = row
+            zbx = zbx_map.get(hostname, {})
+
+            if zbx:
+                avail = zbx.get("zabbix_avail", 0)
+                online = avail == 1
+                status = "online" if online else ("offline" if avail == 2 else db_status or "unknown")
+                ip = zbx.get("zabbix_ip") or ip or ""
+            else:
+                online = db_status == "active"
+                status = db_status or "unknown"
+
+            last_ts = heartbeat_at or last_seen
+            last_str = ""
+            if last_ts:
+                delta = int((datetime.now(last_ts.tzinfo) - last_ts).total_seconds())
+                if delta < 120:   last_str = "práve teraz"
+                elif delta < 3600: last_str = f"pred {delta // 60} min"
+                else:              last_str = f"pred {delta // 3600}h"
+
+            probe_type = "SOC Agent" if "probe" in hostname.lower() else "Host"
+
+            devices.append({
+                "hostname": hostname,
+                "ip": ip or "",
+                "status": status,
+                "online": online,
+                "probe_type": probe_type,
+                "last_seen": last_str,
+                "version": version or "",
+                "in_zabbix": bool(zbx)
+            })
+
+        online_count = sum(1 for d in devices if d["online"])
+        return jsonify({"success": True, "devices": devices, "online": online_count, "total": len(devices)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

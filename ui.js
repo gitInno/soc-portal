@@ -54,6 +54,7 @@ function showDash(view, el) {
   document.getElementById('dv-' + view).classList.add('active');
   if (el) el.classList.add('active');
   if (view === 'notifications') loadNotifications();
+  if (view === 'devices') loadDevices();
 }
 
 // ── Clock in dashboard ────────────────────────────────────────
