@@ -310,6 +310,20 @@ async function loadDevices() {
     renderDevices(d.devices || []);
     const dcDev = document.getElementById('dc-devices');
     if (dcDev) dcDev.textContent = d.online;
+    const overviewList = document.getElementById('overview-devices-list');
+    if (overviewList) {
+      if (!d.devices.length) {
+        overviewList.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">Žiadne zariadenia</div>';
+      } else {
+        overviewList.innerHTML = d.devices.slice(0, 5).map(dev =>
+          '<div class="device-row">' +
+          '<div class="device-status-dot ' + (dev.online ? 'online' : 'offline') + '"></div>' +
+          '<div class="device-name">' + dev.hostname + '</div>' +
+          '<div class="device-ip">' + (dev.ip || '') + '</div>' +
+          '</div>'
+        ).join('');
+      }
+    }
   } catch(e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--red)">Chyba načítania zariadení</td></tr>';
     console.error('loadDevices:', e);
