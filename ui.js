@@ -53,6 +53,7 @@ function showDash(view, el) {
   document.querySelectorAll('.sidebar-nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('dv-' + view).classList.add('active');
   if (el) el.classList.add('active');
+  if (view === 'notifications') loadNotifications();
 }
 
 // ── Clock in dashboard ────────────────────────────────────────

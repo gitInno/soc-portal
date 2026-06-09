@@ -3,6 +3,7 @@
 // ── Aktívny alert filter ──────────────────────────────────────
 let _alertStatusFilter = 'open';
 let _alertSeverityFilter = 'all';
+let _notifChannels = [];
 
 // ── Load Dashboard ────────────────────────────────────────────
 async function loadDashboard(tenantSlug) {
@@ -242,5 +243,83 @@ async function generateReport() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Generovať NIS2 report';
+  }
+}
+
+// ── Notifications ─────────────────────────────────────────────
+async function loadNotifications() {
+  const tenant = _currentTenantSlug || window._dashTenant || '';
+  if (!tenant) return;
+  try {
+    const r = await fetch(API_BASE + '/api/v1/portal/notifications?tenant=' + tenant, {
+      headers: {'X-SOC-Key': SOC_KEY}
+    });
+    const d = await r.json();
+    if (!d.success) return;
+    _notifChannels = d.channels || [];
+    renderNotifications();
+  } catch(e) { console.error('loadNotifications:', e); }
+}
+
+function renderNotifications() {
+  const emailRec = _notifChannels.find(c => c.channel === 'email');
+  const tgRec    = _notifChannels.find(c => c.channel === 'telegram');
+
+  // Email
+  const emailAddr = document.getElementById('notif-email-addr');
+  const emailTog  = document.getElementById('notif-email-toggle');
+  if (emailAddr && emailRec) {
+    emailAddr.textContent = emailRec.address;
+    emailTog.checked = emailRec.active;
+    emailTog.dataset.id = emailRec.id;
+  }
+
+  // Telegram
+  const tgInput = document.getElementById('notif-tg-input');
+  const tgTog   = document.getElementById('notif-tg-toggle');
+  if (tgRec) {
+    if (tgInput) tgInput.value = tgRec.address;
+    if (tgTog)  { tgTog.checked = tgRec.active; tgTog.dataset.id = tgRec.id; }
+  }
+}
+
+async function toggleNotification(id, active) {
+  const tenant = _currentTenantSlug || window._dashTenant || '';
+  try {
+    await fetch(API_BASE + '/api/v1/portal/notifications', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-SOC-Key': SOC_KEY},
+      body: JSON.stringify({tenant, id, active})
+    });
+    await loadNotifications();
+  } catch(e) { console.error('toggleNotification:', e); }
+}
+
+async function saveTelegram() {
+  const tenant = _currentTenantSlug || window._dashTenant || '';
+  const input  = document.getElementById('notif-tg-input');
+  const btn    = document.getElementById('notif-tg-btn');
+  const msg    = document.getElementById('notif-tg-msg');
+  const address = (input ? input.value : '').trim();
+  if (!address) { if(msg){msg.textContent='Zadajte Telegram Chat ID';msg.style.color='var(--red)';msg.style.display='block';} return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Ukladám...'; }
+  if (msg) msg.style.display = 'none';
+  try {
+    const r = await fetch(API_BASE + '/api/v1/portal/notifications', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-SOC-Key': SOC_KEY},
+      body: JSON.stringify({tenant, channel: 'telegram', address, label: 'Telegram', active: true})
+    });
+    const d = await r.json();
+    if (d.success) {
+      if (msg) { msg.textContent = 'Telegram uložený'; msg.style.color = 'var(--green)'; msg.style.display = 'block'; }
+      await loadNotifications();
+    } else {
+      if (msg) { msg.textContent = d.error || 'Chyba'; msg.style.color = 'var(--red)'; msg.style.display = 'block'; }
+    }
+  } catch(e) {
+    if (msg) { msg.textContent = 'Chyba spojenia'; msg.style.color = 'var(--red)'; msg.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Uložiť'; }
   }
 }

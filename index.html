@@ -1182,44 +1182,56 @@ select option{background:var(--bg3)}
       <!-- Notifications -->
       <div class="dash-view" id="dv-notifications">
         <div class="dash-header">
-          <div><div class="dash-title">Notifikácie</div><div class="dash-subtitle">Nastavte si ako chcete byť informovaní</div></div>
+          <div><div class="dash-title">Notifikácie</div><div class="dash-subtitle">Nastavte si ako chcete byť informovaní o alertoch</div></div>
         </div>
-        <div class="grid-equal">
+        <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
+
+          <!-- Email -->
           <div class="panel">
-            <div class="panel-header"><span class="panel-title">Kanály</span></div>
+            <div class="panel-header"><span class="panel-title"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</span></div>
             <div class="panel-body">
-              <div class="channel-toggle">
-                <span class="channel-name"><svg viewBox="0 0 24 24"><path d="M21.198 2.433a2.242 2.242 0 00-1.022.215l-16.5 7.5a2.25 2.25 0 00.236 4.18l4.184 1.186 1.184 4.183a2.25 2.25 0 004.18.236l7.5-16.5a2.242 2.242 0 00-.762-1"/></svg>Telegram</span>
-                <label class="toggle-sw"><input type="checkbox" checked><div class="toggle-track"></div></label>
-              </div>
-              <div class="channel-toggle">
-                <span class="channel-name"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</span>
-                <label class="toggle-sw"><input type="checkbox"><div class="toggle-track"></div></label>
-              </div>
-              <div class="channel-toggle">
-                <span class="channel-name"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>WhatsApp</span>
-                <label class="toggle-sw"><input type="checkbox"><div class="toggle-track"></div></label>
-              </div>
-              <div class="channel-toggle">
-                <span class="channel-name"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>SMS</span>
-                <label class="toggle-sw"><input type="checkbox"><div class="toggle-track"></div></label>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+                <div>
+                  <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Adresa</div>
+                  <div id="notif-email-addr" style="font-family:var(--mono);font-size:13px;color:var(--text)">—</div>
+                </div>
+                <label class="toggle-sw" title="Zapnúť / vypnúť email notifikácie">
+                  <input type="checkbox" id="notif-email-toggle" onchange="toggleNotification(this.dataset.id, this.checked)">
+                  <div class="toggle-track"></div>
+                </label>
               </div>
             </div>
           </div>
-          <div class="notif-demo">
-            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px">Ukážka notifikácie</div>
-            <div class="notif-phone">
-              <div style="height:16px"></div>
-              <div class="notif-bubble" style="position:relative">
-                <div class="notif-pulse"></div>
-                <div class="notif-bubble-app">SOC · InnovativeIT</div>
-                <strong>🚨 Kritický alert</strong><br>
-                SSH Brute Force útok na vašu sieť.<br>
-                <span style="color:#666;font-size:10px">Zdroj: 185.220.101.45<br>14:23 · Zobraziť detail</span>
+
+          <!-- Telegram -->
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M21.198 2.433a2.242 2.242 0 00-1.022.215l-16.5 7.5a2.25 2.25 0 00.236 4.18l4.184 1.186 1.184 4.183a2.25 2.25 0 004.18.236l7.5-16.5a2.242 2.242 0 00-.762-1"/></svg>Telegram</span></div>
+            <div class="panel-body">
+              <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:180px">
+                  <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Chat ID — získate cez <span style="color:var(--accent)">@userinfobot</span></div>
+                  <input type="text" id="notif-tg-input" placeholder="napr. 123456789" style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;font-family:var(--mono)">
+                </div>
+                <button id="notif-tg-btn" onclick="saveTelegram()" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap">Uložiť</button>
+                <label class="toggle-sw" title="Zapnúť / vypnúť Telegram notifikácie" style="margin-bottom:2px">
+                  <input type="checkbox" id="notif-tg-toggle" onchange="toggleNotification(this.dataset.id, this.checked)">
+                  <div class="toggle-track"></div>
+                </label>
+              </div>
+              <div id="notif-tg-msg" style="display:none;font-size:12px;margin-top:8px"></div>
+            </div>
+          </div>
+
+          <!-- WhatsApp + SMS — čoskoro -->
+          <div class="panel" style="opacity:.5">
+            <div class="panel-body">
+              <div style="display:flex;gap:32px">
+                <span style="font-size:13px;color:var(--text3)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:5px"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>WhatsApp — čoskoro</span>
+                <span style="font-size:13px;color:var(--text3)"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:5px"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>SMS — čoskoro</span>
               </div>
             </div>
-            <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.6">Notifikácie dostanete okamžite<br>pri každom kritickom alerte</div>
           </div>
+
         </div>
       </div>
 

@@ -60,6 +60,7 @@ def add_cors_headers(response):
 @app.route("/api/v1/auth/reset-password-request", methods=["OPTIONS"])
 @app.route("/api/v1/auth/reset-password", methods=["OPTIONS"])
 @app.route("/api/v1/portal/change-password", methods=["OPTIONS"])
+@app.route("/api/v1/portal/notifications", methods=["OPTIONS"])
 def handle_options(**kwargs):
     return "", 204
 
@@ -1798,6 +1799,84 @@ def portal_alert_status():
         return jsonify({"success": True, "status": status})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ── NOTIFICATION SETTINGS ────────────────────────────────────────
+
+@app.route('/api/v1/portal/notifications', methods=['GET'])
+def get_notifications():
+    check_auth()
+    tenant_slug = request.args.get('tenant', '')
+    if not tenant_slug:
+        return jsonify({'error': 'tenant required'}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM tenants WHERE slug=%s AND active=true', (tenant_slug,))
+                t = cur.fetchone()
+                if not t:
+                    return jsonify({'error': 'Tenant not found'}), 404
+                cur.execute(
+                    'SELECT id, channel, address, label, active FROM tenant_notifications WHERE tenant_id=%s ORDER BY created_at',
+                    (t[0],)
+                )
+                rows = cur.fetchall()
+        return jsonify({'success': True, 'channels': [
+            {'id': str(r[0]), 'channel': r[1], 'address': r[2], 'label': r[3], 'active': r[4]}
+            for r in rows
+        ]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/v1/portal/notifications', methods=['POST'])
+def save_notification():
+    check_auth()
+    data = request.get_json() or {}
+    tenant_slug = data.get('tenant', '')
+    channel = data.get('channel', '')
+    address = (data.get('address') or '').strip()
+    label = data.get('label') or channel
+    active = data.get('active', True)
+    rec_id = data.get('id')
+
+    if not tenant_slug:
+        return jsonify({'error': 'tenant required'}), 400
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM tenants WHERE slug=%s AND active=true', (tenant_slug,))
+                t = cur.fetchone()
+                if not t:
+                    return jsonify({'error': 'Tenant not found'}), 404
+                tenant_id = t[0]
+
+                if rec_id:
+                    # Toggle active na existujúcom zázname
+                    cur.execute(
+                        'UPDATE tenant_notifications SET active=%s WHERE id=%s AND tenant_id=%s RETURNING id',
+                        (active, rec_id, tenant_id)
+                    )
+                else:
+                    # Upsert nový kanál
+                    if not channel or not address:
+                        return jsonify({'error': 'channel and address required'}), 400
+                    if channel not in ('email', 'telegram', 'whatsapp', 'sms'):
+                        return jsonify({'error': 'Invalid channel'}), 400
+                    cur.execute('''
+                        INSERT INTO tenant_notifications (tenant_id, channel, address, label, active)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (tenant_id, channel, address)
+                        DO UPDATE SET active=%s, label=%s
+                        RETURNING id
+                    ''', (tenant_id, channel, address, label, active, active, label))
+
+                row = cur.fetchone()
+                conn.commit()
+        return jsonify({'success': True, 'id': str(row[0]) if row else None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == "__main__":
     os.makedirs(PACKAGES_DIR, exist_ok=True)
