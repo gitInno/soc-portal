@@ -48,6 +48,7 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-SOC-Key"
     return response
 
+@app.route("/api/v1/probe/heartbeat", methods=["OPTIONS"])
 @app.route("/api/v1/portal/login", methods=["OPTIONS"])
 @app.route("/api/v1/swprobe/register", methods=["OPTIONS"])
 @app.route("/api/v1/swprobe/token", methods=["OPTIONS"])
@@ -1876,6 +1877,49 @@ def save_notification():
                 row = cur.fetchone()
                 conn.commit()
         return jsonify({'success': True, 'id': str(row[0]) if row else None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/v1/probe/heartbeat', methods=['POST'])
+def probe_heartbeat():
+    data = request.get_json() or {}
+    tenant_slug = data.get('tenant', '').strip()
+    hostname    = data.get('hostname', '').strip()
+    wg_ip       = data.get('wg_ip', '').strip()
+    version     = data.get('version', '1.0').strip()
+
+    if not tenant_slug or not hostname:
+        return jsonify({'error': 'tenant and hostname required'}), 400
+
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM tenants WHERE slug=%s AND active=true', (tenant_slug,))
+                t = cur.fetchone()
+                if not t:
+                    return jsonify({'error': 'Tenant not found'}), 404
+                tenant_id = t[0]
+
+                # Upsert probe
+                cur.execute('''
+                    INSERT INTO probes (tenant_id, hostname, ip_address, status, last_seen)
+                    VALUES (%s, %s, %s, 'active', now())
+                    ON CONFLICT (hostname) DO UPDATE
+                      SET status='active', last_seen=now(), ip_address=EXCLUDED.ip_address
+                ''', (tenant_id, hostname, wg_ip or None))
+
+                # Upsert heartbeat
+                cur.execute('''
+                    INSERT INTO probe_heartbeats (probe_hostname, tenant_id, last_seen, ip_address, version)
+                    VALUES (%s, %s, now(), %s, %s)
+                    ON CONFLICT (probe_hostname) DO UPDATE
+                      SET last_seen=now(), ip_address=EXCLUDED.ip_address, version=EXCLUDED.version,
+                          tenant_id=EXCLUDED.tenant_id
+                ''', (hostname, tenant_id, wg_ip or None, version))
+
+                conn.commit()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
