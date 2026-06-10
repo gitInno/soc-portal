@@ -34,6 +34,7 @@ ALLOWED_ORIGINS = {
     "https://portal.innovativeit.sk",
     "https://portal-dev.innovativeit.sk",
     "https://soc-dev.innovativeit.sk",
+    "https://swprobe.innovativeit.sk",
 }
 
 @app.after_request
@@ -118,8 +119,8 @@ def send_registration_email(to_email, name, tenant_slug):
 BUILD_SCRIPT = "/opt/soc/swprobe/soc-build-swprobe.sh"
 
 DB_CONFIG = {
-    "host": "172.21.0.3",
-    "port": 5432,
+    "host": "127.0.0.1",
+    "port": 5433,
     "database": "soc",
     "user": "soc_admin",
     "password": "SocPg2026RAND=a9fb4ccd137146cd{RAND}"
@@ -2036,6 +2037,50 @@ def get_devices():
         return jsonify({"success": True, "devices": devices, "online": online_count, "total": len(devices)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+PORTAL_DIR = "/var/www/portal.innovativeit.sk"
+
+def _serve_portal_html():
+    from flask import make_response
+    resp = make_response(send_file(os.path.join(PORTAL_DIR, 'index.html')))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+@app.route('/portal', methods=['GET'])
+def portal_redirect():
+    return redirect('/portal/', 301)
+
+@app.route('/portal/', methods=['GET'])
+def portal_page():
+    return _serve_portal_html()
+
+@app.route('/portal/<path:filename>', methods=['GET'])
+def portal_static(filename):
+    from flask import send_from_directory
+    return send_from_directory(PORTAL_DIR, filename)
+
+@app.route('/soc', methods=['GET'])
+def soc_redirect():
+    return redirect('/soc/', 301)
+
+@app.route('/soc/', methods=['GET'])
+def soc_page():
+    return _serve_portal_html()
+
+@app.route('/soc/<path:filename>', methods=['GET'])
+def soc_static(filename):
+    from flask import send_from_directory
+    return send_from_directory(PORTAL_DIR, filename)
+
+@app.errorhandler(404)
+def not_found(e):
+    resp = app.make_response(("Not Found", 404))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
 
 
 if __name__ == "__main__":

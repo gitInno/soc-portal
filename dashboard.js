@@ -82,6 +82,8 @@ async function loadDashboard(tenantSlug) {
 
     // Načítaj alerts tab s aktívnym filtrom
     await loadAlerts(tenantSlug, _alertStatusFilter, _alertSeverityFilter);
+    // Zariadenia overview (bez await — nenblokuje dashboard)
+    loadDevices();
   } catch (e) {
     console.error('Dashboard fetch error:', e);
   }
