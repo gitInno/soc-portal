@@ -68,7 +68,7 @@ def add_cors_headers(response):
 def handle_options(**kwargs):
     return "", 204
 
-API_KEY = "soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c"
+API_KEY = os.environ.get("SOC_API_KEY", "soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c")
 PACKAGES_DIR = "/opt/soc/swprobe/packages"
 
 # SMTP konfig
@@ -76,7 +76,7 @@ SMTP_HOST = "smtp.innovativeit.sk"
 SMTP_HOST_FALLBACK = "45.13.137.117"
 SMTP_PORT = 587
 SMTP_USER = "portal@innovativeit.sk"
-SMTP_PASS = ""
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
 SMTP_FROM = "portal@innovativeit.sk"
 
 def send_registration_email(to_email, name, tenant_slug):
@@ -119,11 +119,11 @@ def send_registration_email(to_email, name, tenant_slug):
 BUILD_SCRIPT = "/opt/soc/swprobe/soc-build-swprobe.sh"
 
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5433,
-    "database": "soc",
-    "user": "soc_admin",
-    "password": "SocPg2026RAND=a9fb4ccd137146cd{RAND}"
+    "host": os.environ.get("DB_HOST", "127.0.0.1"),
+    "port": int(os.environ.get("DB_PORT", "5433")),
+    "database": os.environ.get("DB_NAME", "soc"),
+    "user": os.environ.get("DB_USER", "soc_admin"),
+    "password": os.environ.get("DB_PASS", "SocPg2026RAND=a9fb4ccd137146cd{RAND}")
 }
 
 # Jednorazove tokeny: {token: {tenant, os, expires}}
