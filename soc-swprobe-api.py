@@ -32,8 +32,6 @@ limiter = Limiter(
 
 ALLOWED_ORIGINS = {
     "https://portal.innovativeit.sk",
-    "https://portal-dev.innovativeit.sk",
-    "https://soc-dev.innovativeit.sk",
     "https://swprobe.innovativeit.sk",
 }
 
