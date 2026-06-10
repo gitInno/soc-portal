@@ -172,6 +172,63 @@ def check_auth():
 def get_db():
     return psycopg2.connect(**DB_CONFIG)
 
+# ── Portal session auth (token-per-login, replaces global API key in browser) ─
+def _ensure_portal_sessions_table():
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS portal_sessions (
+                token TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                role TEXT NOT NULL,
+                expires_at TIMESTAMPTZ NOT NULL
+            )
+        """)
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        print(f"[WARN] portal_sessions init: {e}", flush=True)
+
+def create_portal_session(tenant_id, slug, role):
+    import secrets as _sec
+    token = _sec.token_urlsafe(32)
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO portal_sessions (token,tenant_id,slug,role,expires_at) "
+            "VALUES (%s,%s,%s,%s, now()+interval '8 hours')",
+            (token, str(tenant_id), slug or "", role)
+        )
+        conn.commit(); cur.close(); conn.close()
+    except Exception as e:
+        print(f"[WARN] create_portal_session: {e}", flush=True)
+    return token
+
+def require_portal_auth():
+    """Returns (tenant_id, slug, role). Falls back to legacy X-SOC-Key → (None,None,None)."""
+    pt = request.headers.get("X-Portal-Token", "")
+    if pt:
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT tenant_id,slug,role FROM portal_sessions "
+                "WHERE token=%s AND expires_at>now()", (pt,)
+            )
+            row = cur.fetchone(); cur.close(); conn.close()
+            if row:
+                return row[0], row[1], row[2]
+        except Exception:
+            pass
+        abort(401, "Session expired or invalid")
+    if request.headers.get("X-SOC-Key","") != API_KEY:
+        abort(401, "Unauthorized")
+    return None, None, None  # legacy: caller reads tenant from request params
+
+
+
 def get_tenant(slug):
     conn = get_db()
     cur = conn.cursor()
@@ -520,7 +577,8 @@ def status():
 # ─────────────────────────────────────────
 @app.route("/api/v1/portal/dashboard")
 def portal_dashboard():
-    tenant_slug = request.args.get("tenant", "")
+    _tid, _slug, _ = require_portal_auth()
+    tenant_slug = _slug if _slug else request.args.get("tenant", "")
     if not tenant_slug:
         return jsonify({"error": "tenant required"}), 400
     try:
@@ -1086,7 +1144,8 @@ def auth_login():
         if role == "customer": redirect = {"page": "dashboard", "slug": p.get("slug")}
         elif role == "partner": redirect = {"page": "/partner", "partner_id": p.get("id")}
         elif role == "operator": redirect = {"page": "/operator"}
-        return jsonify({"success": True, "multiple": False, "role": role, "profile": p, "redirect": redirect})
+        pt = create_portal_session(p.get("id",""), p.get("slug",""), role) if role in ("customer","partner","operator") else None
+        return jsonify({"success": True, "multiple": False, "role": role, "profile": p, "redirect": redirect, "portal_token": pt})
 
     # Viac profilov  -  vrátime zoznam na výber
     # Filtruj pending z výberu
@@ -1101,7 +1160,8 @@ def auth_login():
         if role2 == "customer": redirect2 = {"page": "dashboard", "slug": p2.get("slug")}
         elif role2 == "partner": redirect2 = {"page": "/partner", "partner_id": p2.get("id")}
         elif role2 == "operator": redirect2 = {"page": "/operator"}
-        return jsonify({"success": True, "multiple": False, "role": role2, "profile": p2, "redirect": redirect2})
+        pt2 = create_portal_session(p2.get("id",""), p2.get("slug",""), role2) if role2 in ("customer","partner","operator") else None
+        return jsonify({"success": True, "multiple": False, "role": role2, "profile": p2, "redirect": redirect2, "portal_token": pt2})
 
     return jsonify({"success": True, "multiple": True, "profiles": selectable})
 
@@ -1131,7 +1191,8 @@ def auth_select():
             if not pw_hash or not _bcrypt.checkpw(password.encode(), pw_hash.encode()):
                 return jsonify({"error": "Nespravne heslo"}), 401
             p = {"role": "customer", "id": str(tid), "slug": slug, "name": name}
-            return jsonify({"success": True, "multiple": False, "role": "customer", "profile": p, "redirect": {"page": "dashboard", "slug": slug}})
+            pt3 = create_portal_session(str(tid), slug, "customer")
+            return jsonify({"success": True, "multiple": False, "role": "customer", "profile": p, "redirect": {"page": "dashboard", "slug": slug}, "portal_token": pt3})
 
         elif role in ("partner", "operator"):
             cur.execute("SELECT id, name, password_hash, role FROM partners WHERE id=%s", (pid,))
@@ -1144,7 +1205,8 @@ def auth_select():
             actual_role = prole or role
             p = {"role": actual_role, "id": str(pid2), "name": pname}
             redir = {"/operator": {"page": "/operator"}, "/partner": {"page": "/partner", "partner_id": str(pid2)}}.get("/" + actual_role, {"page": "/" + actual_role})
-            return jsonify({"success": True, "multiple": False, "role": actual_role, "profile": p, "redirect": redir})
+            pt4 = create_portal_session(str(pid2), "", actual_role)
+            return jsonify({"success": True, "multiple": False, "role": actual_role, "profile": p, "redirect": redir, "portal_token": pt4})
 
         return jsonify({"error": "Neznama rola"}), 400
 
@@ -1195,10 +1257,8 @@ def cors_alert_status(alert_id):
 # ─────────────────────────────────────────
 @app.route('/api/v1/portal/alerts', methods=['GET'])
 def portal_alerts_list():
-    key = request.headers.get('X-SOC-Key')
-    if key != API_KEY:
-        return jsonify({'error': 'Unauthorized'}), 401
-    tenant_slug = request.args.get('tenant', '')
+    _tid, _slug, _ = require_portal_auth()
+    tenant_slug = _slug if _slug else request.args.get('tenant', '')
     status_filter = request.args.get('status', 'open')
     limit = min(int(request.args.get('limit', 50)), 200)
     try:
@@ -1376,8 +1436,8 @@ def _pdf_safe(text):
 
 @app.route("/api/v1/report/generate")
 def generate_report():
-    check_auth()
-    tenant_slug = request.args.get("tenant", "")
+    _tid, _slug, _ = require_portal_auth()
+    tenant_slug = _slug if _slug else request.args.get("tenant", "")
     days_param = request.args.get("days", "30")
     try:
         days = int(days_param)
@@ -1682,7 +1742,7 @@ def generate_report():
 # -- CHANGE PASSWORD --
 @app.route("/api/v1/portal/change-password", methods=["POST"])
 def portal_change_password():
-    check_auth()
+    require_portal_auth()
     data = request.get_json() or {}
     slug = data.get("tenant")
     old_pw = data.get("old_password", "")
@@ -1781,7 +1841,7 @@ def reset_password_confirm():
 # -- ALERT STATUS UPDATE --
 @app.route("/api/v1/portal/alert/status", methods=["POST"])
 def portal_alert_status():
-    check_auth()
+    require_portal_auth()
     data = request.get_json() or {}
     alert_id = data.get("alert_id")
     status = data.get("status", "")
@@ -1813,8 +1873,8 @@ def portal_alert_status():
 
 @app.route('/api/v1/portal/notifications', methods=['GET'])
 def get_notifications():
-    check_auth()
-    tenant_slug = request.args.get('tenant', '')
+    _tid, _slug, _ = require_portal_auth()
+    tenant_slug = _slug if _slug else request.args.get('tenant', '')
     if not tenant_slug:
         return jsonify({'error': 'tenant required'}), 400
     try:
@@ -1839,9 +1899,9 @@ def get_notifications():
 
 @app.route('/api/v1/portal/notifications', methods=['POST'])
 def save_notification():
-    check_auth()
+    _tid, _slug, _ = require_portal_auth()
     data = request.get_json() or {}
-    tenant_slug = data.get('tenant', '')
+    tenant_slug = _slug if _slug else data.get('tenant', '')
     channel = data.get('channel', '')
     address = (data.get('address') or '').strip()
     label = data.get('label') or channel
@@ -1971,7 +2031,7 @@ def _zbx_hosts(token, hostnames):
 
 @app.route('/api/v1/portal/devices', methods=['GET'])
 def get_devices():
-    check_auth()
+    _tid, _slug, _ = require_portal_auth()
     tenant_slug = request.args.get('tenant', '')
     if not tenant_slug:
         return jsonify({'error': 'tenant required'}), 400
@@ -2084,5 +2144,6 @@ def not_found(e):
 
 
 if __name__ == "__main__":
+    _ensure_portal_sessions_table()
     os.makedirs(PACKAGES_DIR, exist_ok=True)
     app.run(host="0.0.0.0", port=5050, debug=False)

@@ -11,7 +11,7 @@ async function loadDashboard(tenantSlug) {
   _currentTenantSlug = tenantSlug;
   try {
     const r = await fetch(API_BASE + '/api/v1/portal/dashboard?tenant=' + tenantSlug, {
-      headers: {'X-SOC-Key': SOC_KEY}
+      headers: {'X-Portal-Token': getPortalToken()}
     });
     const d = await r.json();
     if (d.error) { console.error('Dashboard error:', d.error); return; }
@@ -98,7 +98,7 @@ async function loadAlerts(tenantSlug, status, severity) {
   if (!alertList) return;
   alertList.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3)">Načítavam alerty...</div>';
   try {
-    const r = await fetch(url, {headers: {'X-SOC-Key': SOC_KEY}});
+    const r = await fetch(url, {headers: {'X-Portal-Token': getPortalToken()}});
     const d = await r.json();
     if (!d.success) { alertList.innerHTML = '<div style="padding:24px;color:#f87171">Chyba načítania alertov</div>'; return; }
     let alerts = d.alerts || [];
@@ -185,7 +185,7 @@ async function setAlertStatus(alertId, newStatus, tenantSlug) {
   try {
     const r = await fetch(API_BASE + '/api/v1/portal/alert/status', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': SOC_KEY},
+      headers: {'Content-Type': 'application/json', 'X-Portal-Token': getPortalToken()},
       body: JSON.stringify({alert_id: alertId, status: newStatus, tenant: tenantSlug})
     });
     const d = await r.json();
@@ -216,7 +216,7 @@ async function generateReport() {
   }
   try {
     const r = await fetch(API_BASE + '/api/v1/report/generate?tenant=' + encodeURIComponent(slug) + '&days=' + days, {
-      headers: {'X-SOC-Key': SOC_KEY}
+      headers: {'X-Portal-Token': getPortalToken()}
     });
     if (!r.ok) {
       const e = await r.json();
@@ -254,7 +254,7 @@ async function loadNotifications() {
   if (!tenant) return;
   try {
     const r = await fetch(API_BASE + '/api/v1/portal/notifications?tenant=' + tenant, {
-      headers: {'X-SOC-Key': SOC_KEY}
+      headers: {'X-Portal-Token': getPortalToken()}
     });
     const d = await r.json();
     if (!d.success) return;
@@ -290,7 +290,7 @@ async function toggleNotification(id, active) {
   try {
     await fetch(API_BASE + '/api/v1/portal/notifications', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': SOC_KEY},
+      headers: {'Content-Type': 'application/json', 'X-Portal-Token': getPortalToken()},
       body: JSON.stringify({tenant, id, active})
     });
     await loadNotifications();
@@ -305,7 +305,7 @@ async function loadDevices() {
   if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">Načítavam zariadenia...</td></tr>';
   try {
     const r = await fetch(API_BASE + '/api/v1/portal/devices?tenant=' + tenant, {
-      headers: {'X-SOC-Key': SOC_KEY}
+      headers: {'X-Portal-Token': getPortalToken()}
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error || 'Chyba API');
@@ -368,7 +368,7 @@ async function saveTelegram() {
   try {
     const r = await fetch(API_BASE + '/api/v1/portal/notifications', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': SOC_KEY},
+      headers: {'Content-Type': 'application/json', 'X-Portal-Token': getPortalToken()},
       body: JSON.stringify({tenant, channel: 'telegram', address, label: 'Telegram', active: true})
     });
     const d = await r.json();

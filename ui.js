@@ -2,6 +2,10 @@
 
 const API_BASE = 'https://swprobe.innovativeit.sk';
 const SOC_KEY = 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c';
+function getPortalToken() {
+  if (typeof _portalToken !== 'undefined' && _portalToken) return _portalToken;
+  try { return JSON.parse(sessionStorage.getItem('soc_session') || '{}').portal_token || null; } catch(e) { return null; }
+}
 
 let selectedOS = 'windows';
 let regData = {};

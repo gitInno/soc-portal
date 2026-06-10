@@ -1307,6 +1307,7 @@ select option{background:var(--bg3)}
 <script>
 let selectedOS='windows';
 let regData={};
+let _portalToken = (function(){try{return JSON.parse(sessionStorage.getItem('soc_session')||'{}').portal_token||null;}catch(e){return null;}})();
 
 // Nav scroll effect
 window.addEventListener('scroll',()=>{
@@ -1457,7 +1458,7 @@ function generateReport(){
     statusEl.textContent='Generujem NIS2 report za poslednych '+days+' dni...';
   }
   fetch('https://swprobe.innovativeit.sk/api/v1/report/generate?tenant='+encodeURIComponent(slug)+'&days='+days,{
-    headers:{'X-SOC-Key':'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'}
+    headers:{'X-Portal-Token':_portalToken}
   })
   .then(r=>{
     if(!r.ok){
@@ -1500,7 +1501,7 @@ function loadDashboard(tenantSlug){
   if(!tenantSlug) return;
   _currentTenantSlug=tenantSlug;
   fetch('https://swprobe.innovativeit.sk/api/v1/portal/dashboard?tenant='+tenantSlug,{
-    headers:{'X-SOC-Key':'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'}
+    headers:{'X-Portal-Token':_portalToken}
   })
   .then(r=>r.json())
   .then(d=>{
@@ -1633,7 +1634,7 @@ async function doLogin(){
   try {
     const r = await fetch('https://swprobe.innovativeit.sk/api/v1/portal/auth', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({email, password})
     });
     if (r.status === 429) {
@@ -1650,6 +1651,7 @@ async function doLogin(){
     if (d.multiple) {
       showProfileSelector(d.profiles);
     } else {
+      window._loginPortalToken = d.portal_token || null;
       handleProfileLogin(d.profile);
     }
   } catch(e) {
@@ -1725,10 +1727,12 @@ function handleProfileLogin(profile) {
     // Zákazník — uloži slug a zobraz dashboard
     regData.slug = profile.slug;
     regData.name = profile.name;
+    _portalToken = window._loginPortalToken || null;
     sessionStorage.setItem('soc_session', JSON.stringify({
       slug: profile.slug,
       name: profile.name,
-      role: 'customer'
+      role: 'customer',
+      portal_token: _portalToken
     }));
     showPage('dashboard');
     loadDashboard(profile.slug);
@@ -1749,12 +1753,12 @@ function handleProfileLogin(profile) {
 async function setAlertStatus(alertId, newStatus, tenantSlug) {
   try {
     const r = await fetch('https://swprobe.innovativeit.sk/api/v1/portal/dashboard?tenant=' + tenantSlug, {
-      headers: {'X-SOC-Key': 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'}
+      headers: {'X-Portal-Token': _portalToken}
     });
     // Priamy PATCH na alert status
     const r2 = await fetch('https://swprobe.innovativeit.sk/api/v1/portal/alert/status', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'},
+      headers: {'Content-Type': 'application/json', 'X-Portal-Token': _portalToken},
       body: JSON.stringify({alert_id: alertId, status: newStatus, tenant: tenantSlug})
     });
     const d = await r2.json();
@@ -1795,7 +1799,7 @@ async function doChangePassword() {
   try {
     const r = await fetch('https://swprobe.innovativeit.sk/api/v1/portal/change-password', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'},
+      headers: {'Content-Type': 'application/json', 'X-Portal-Token': _portalToken},
       body: JSON.stringify({tenant: slug, old_password: oldPw, new_password: newPw})
     });
     const d = await r.json();
@@ -1833,7 +1837,7 @@ async function doResetRequest() {
   try {
     const r = await fetch('https://swprobe.innovativeit.sk/api/v1/auth/reset-password-request', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({email})
     });
     const d = await r.json();
@@ -1855,7 +1859,7 @@ async function doResetConfirm() {
   try {
     const r = await fetch('https://swprobe.innovativeit.sk/api/v1/auth/reset-password', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-SOC-Key': 'soc-key-prod-b153c299eea49ca8e7b3c791069fe6ad3af5efefcae58c1c'},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({token, new_password: pw1})
     });
     const d = await r.json();
