@@ -1,0 +1,30 @@
+credentials-file: /root/.cloudflared/266cac37-e79a-46ac-a4af-7ba4ec8df740.json
+tunnel: soc-tunnel
+protocol: http2
+ingress:
+- hostname: ssh.innovativeit.sk
+  service: ssh://localhost:22
+- hostname: sandbox.innovativeit.sk
+  service: http://localhost:80
+- hostname: wazuh-ops.innovativeit.sk
+  originRequest:
+    noTLSVerify: true
+  service: https://localhost:5601
+- hostname: n8n-ops.innovativeit.sk
+  originRequest:
+    connectTimeout: 30s
+    disableChunkedEncoding: true
+    keepAliveConnections: 100
+    keepAliveTimeout: 120s
+  service: http://localhost:5680
+- hostname: zabbix-ops.innovativeit.sk
+  service: http://localhost:8081
+- hostname: grafana-ops.innovativeit.sk
+  service: http://localhost:3001
+- hostname: swprobe.innovativeit.sk
+  service: http://localhost:5050
+- hostname: portal.innovativeit.sk
+  originRequest:
+    httpHostHeader: portal.innovativeit.sk
+  service: http://localhost:80
+- service: http_status:404
